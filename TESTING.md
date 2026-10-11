@@ -9,7 +9,7 @@ python -m unittest discover -s tests -p 'test_*.py' -v
 python -m compileall -q bridge_client.py server.py tests
 ```
 
-Eight transport tests use a local fake plugin to exercise authenticated requests, Unicode responses, rejected tokens, recovery paths, malformed/truncated/oversized responses, bad or missing endpoints and request limits. No game or MCP SDK is needed. They test the Python client contract, not the real plugin's authentication implementation.
+Nine transport tests use a local fake plugin to exercise authenticated requests, Unicode responses, rejected tokens, recovery paths, operation IDs on uncertain responses, malformed/truncated/oversized responses, bad or missing endpoints and request limits. No game or MCP SDK is needed. They test the Python client contract, not the real plugin's authentication implementation.
 
 ## Build and live checks
 
@@ -45,3 +45,23 @@ On 2026-10-10 both mutation suites passed on original Koikatu / Unity 5.6.2f1, B
 This does not establish compatibility with all mods or verify all extended card data. Materials can override rendered colors; female characters, other game editions, additional clothing slots and all hair-length combinations need further coverage.
 
 On 2026-10-11, [GitHub CI passed](https://github.com/SkyIIneR9/koikatu-maker-mcp/actions/runs/38126321198) on Windows with Python 3.13: dependency installation, Python compilation, all eight transport tests and source packaging. CI does not compile the game plugin or run live game tests.
+
+## Design workflow, 0.3.0
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 tests/smoke_design.py --mutate
+```
+
+This suite needs a clothed male test character, an occupied and an empty standard accessory slot, a head bone, a top material exposing `_ShadowColor`, ABMX and Material Editor. It queries current IDs rather than assuming mod IDs. Keep mod card-load toggles enabled for the data being tested. It saves a snapshot first; the recovery ID/card path are written immediately to `runtime/design-smoke-recovery.json`. A `finally` block restores the snapshot; if the game closes during the test, reopen it and restore that snapshot manually through the bridge.
+
+On 2026-10-11 this suite passed with ABMX 5.4.0.0 and Material Editor 4.0.2.0, alongside the two existing mutation regression suites:
+
+- 33 real MCP tools; typed cosmetics/name patches with invalid-batch rejection.
+- Sideloader GUID/original-slot resolution of a modded hairstyle.
+- Request replay returns the original response/recovery path without a second mutation; completed operation status is queryable.
+- Accessory position/color editing, creation and removal; outfit switching away and back.
+- Eye/skin/eyebrow settings, accessories, ABMX scale and Material Editor color survive a card round trip.
+- Three PNG image blocks from multi-angle capture; original camera and preset restored.
+- Snapshot restores original cosmetic/hair/clothes/accessory values, camera, the tested ABMX bone and material properties.
+
+The test accounts for the installed translation plugin serializing a native nickname while displaying its translation; other edited identity fields are compared. Timeout recovery during a real engine stall, all shader types, all bone operations, every cosmetic asset type, female characters and additional mod versions remain unverified. Passing suites establish the exercised workflow, not universal compatibility.

@@ -9,7 +9,8 @@ FILES = (
     'bridge_client.py', 'server.py', 'build.ps1', 'setup.ps1',
     'package_source.py', 'requirements.txt', 'requirements-lock.txt',
     'plugin/MakerBridge.cs', 'plugin/MakerBridge.Appearance.cs',
-    'tests/test_bridge_client.py', 'tests/smoke_live.py', 'tests/smoke_appearance.py',
+    'plugin/MakerBridge.Design.cs', 'plugin/MakerBridge.Mods.cs', 'plugin/MakerBridge.Workflow.cs',
+    'tests/test_bridge_client.py', 'tests/smoke_live.py', 'tests/smoke_appearance.py', 'tests/smoke_design.py',
     '.github/workflows/tests.yml',
 )
 
@@ -19,7 +20,7 @@ def package():
     for path in paths:
         if not path.is_file() or path.resolve() != path.absolute():
             raise ValueError(f'Missing or linked source file: {path}')
-    target = ROOT / 'dist' / 'koikatu-maker-mcp-0.2.0-source.zip'
+    target = ROOT / 'dist' / 'koikatu-maker-mcp-0.3.0-source.zip'
     target.parent.mkdir(exist_ok=True)
     with ZipFile(target, 'w', ZIP_DEFLATED) as archive:
         for name, path in zip(FILES, paths):

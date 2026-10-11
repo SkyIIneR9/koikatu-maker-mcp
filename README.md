@@ -1,4 +1,4 @@
-# Koikatu Character Maker MCP — 0.2.0
+# Koikatu Character Maker MCP — 0.3.0
 
 [Русская документация](README.ru.md)
 
@@ -86,9 +86,33 @@ Shape undo replaces both entire arrays, including manual edits made since the br
 
 New cards go to `UserData/chara/male/MCP` or `female/MCP`; recovery cards go in `_backups` beneath that folder. Existing cards are never overwritten. Load accepts absolute paths or paths relative to `UserData/chara`, including recovery cards. Traversal and linked card paths are rejected. Card listing omits `_backups`.
 
-Hair/clothing edits and loads back up before changing the character. If an operation fails after starting, inspect its recovery path and current state, then load that card if needed. A timeout does not prove failure: do not retry mutations blindly. Screenshots, test cards and backups are not automatically deleted.
+Hair/clothing edits and loads back up before changing the character. If an operation fails after starting, inspect its recovery path and current state, then load that card if needed. A timeout does not prove failure: query `maker_get_operation` with the operation ID from the error before retrying. The current game session retains the last 128 requests. Identical request IDs and arguments return the existing operation; duplicate IDs with different arguments are rejected. This bounded history is not durable across game restarts or eviction. Screenshots, test cards and backups are not automatically deleted.
 
-Save/load uses game APIs and installed mod hooks. Full base-game load flags are enabled temporarily, but **third-party custom load toggles remain in effect**. Verification compares sex, name, vanilla shapes, exposed hair values and active-coordinate clothes. It does not verify every extended mod field or pixel-identical rendering. Direct ABMX, Material Editor, overlay and accessory authoring are not implemented. Clothing edits affect the active coordinate only; there is no coordinate-selection tool yet.
+Save/load uses game APIs and installed mod hooks. Full base-game load flags are enabled temporarily, but **third-party custom load toggles remain in effect**. Verification compares sex, name, vanilla shapes, exposed hair values, active-coordinate clothes and exposed cosmetic settings. Translation plugins can serialize native nicknames while displaying translated ones; snapshots preserve the visible identity separately. It does not verify every extended mod field or pixel-identical rendering. ABMX and Material Editor are optional adapters. ABMX targets BodyTop bones; Material Editor exposes listed color/float properties, without shader replacement or texture import. Accessories support base-game slots 0..19; extra MoreAccessories slots and overlay authoring are not exposed. Clothing/accessory edits affect the active coordinate; use `maker_select_coordinate` to switch outfits.
+
+## Design workflow in 0.3
+
+There are **33 tools**. In addition to the original tools above:
+
+| Tools | Purpose |
+|---|---|
+| `maker_capabilities` | Installed optional adapters, versions, limits |
+| `maker_get_design` / `maker_set_design` | Typed schema and validated eye, eyebrow, skin, makeup and identity patches |
+| `maker_get_accessories` / `maker_set_accessory` | Slot/category, parent, colors and two transform corrections |
+| `maker_list_coordinates` / `maker_select_coordinate` | Inspect/switch outfits, preserving the current outfit |
+| `maker_resolve_asset` | Sideloader GUID/original slot ↔ current asset ID |
+| `maker_list_bones` / `maker_set_bone` | ABMX scale, length, position and rotation |
+| `maker_list_materials` / `maker_set_material` | Inspect supported shader properties; persist changes through Material Editor |
+| `maker_snapshot` / `maker_list_snapshots` / `maker_restore_snapshot` | Persistent card + coordinate + camera checkpoints |
+| `maker_get_operation` | Query a timed-out or uncertain request |
+| `maker_camera_preset` | List/save/load named cameras |
+| `maker_capture_views` | Up to eight camera angles as MCP images, restoring the camera afterward |
+
+Start with capabilities and a snapshot. Query the relevant schema/catalog before editing. Design patches have the form `{"left_eye":{"baseColor":[0.2,0.4,0.6,1]},"body":{"skinMainColor":[0.9,0.75,0.65,1]}}`. All fields are validated before the backup and mutation. Base makeup may be overridden by coordinate makeup.
+
+ABMX edits are coordinate-specific by default. Setting `coordinate_specific=false` deliberately collapses outfit-specific modifiers to the current values for all outfits. Material renderer IDs expire after reload: query again. Material Editor persists by material name within a target, so equal names can share changes. The bridge supports a typed property allowlist because Unity 5.6 cannot enumerate shader properties at runtime.
+
+Snapshots store a card and camera/coordinate metadata under local runtime. Restoring first creates a recovery card, then loads the snapshot and reports base-game comparisons. Third-party card-load toggles still apply; inspect extended mod state with its adapter. Snapshot metadata does not contain a complete copy of every mod's state. Camera presets and snapshots are local, ignored by Git, and never packaged.
 
 ## Development
 

@@ -61,6 +61,7 @@ class TransportTests(unittest.TestCase):
     def test_authenticated_request_and_unicode_response(self):
         result, seen = self.exchange({'ok': True, 'result': {'name': '髪'}})
         self.assertEqual(result, {'name': '髪'})
+        self.assertEqual(len(seen[0].pop('request_id')), 32)
         self.assertEqual(seen, [{'token': 'test-token', 'method': 'get_appearance', 'params': {'slot': 'front'}}])
 
     def test_bad_token_surfaces_rejection(self):
@@ -70,6 +71,10 @@ class TransportTests(unittest.TestCase):
     def test_mutation_failure_preserves_recovery_path(self):
         with self.assertRaisesRegex(bridge.BridgeError, 'Recovery card: male/MCP/_backups/test.png'):
             self.exchange({'ok': False, 'error': 'Reload failed', 'backup_card': 'male/MCP/_backups/test.png'})
+
+    def test_uncertain_response_exposes_operation_id(self):
+        with self.assertRaisesRegex(bridge.BridgeError, r'Operation ID: [0-9a-f]{32}'):
+            self.exchange(b'{"ok":true')
 
     def test_invalid_response_envelopes(self):
         for reply in [b'not-json\n', [], {'ok': 'true'}, {'ok': True}, b'{}']:

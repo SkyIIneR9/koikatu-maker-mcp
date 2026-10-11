@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -15,7 +16,7 @@ class BridgeError(RuntimeError):
     pass
 
 
-def call(method: str, **params):
+def call(method: str, *, request_id: str | None = None, **params):
     try:
         endpoint = json.loads(ENDPOINT.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError) as exc:
@@ -27,7 +28,8 @@ def call(method: str, **params):
     if (not isinstance(endpoint.get("token"), str) or not endpoint["token"]
             or type(endpoint.get("port")) is not int or not 1 <= endpoint["port"] <= 65535):
         raise BridgeError("Invalid bridge endpoint credentials or port")
-    request = json.dumps({"token": endpoint["token"], "method": method, "params": params}, allow_nan=False).encode() + b"\n"
+    request_id = request_id or uuid.uuid4().hex
+    request = json.dumps({"token": endpoint["token"], "method": method, "params": params, "request_id": request_id}, allow_nan=False).encode() + b"\n"
     if len(request) > 65536:
         raise BridgeError("Request too large")
     try:
@@ -37,19 +39,20 @@ def call(method: str, **params):
             with conn.makefile("rb") as reader:
                 raw = reader.readline(8 * 1024 * 1024 + 1)
         if len(raw) > 8 * 1024 * 1024 or not raw.endswith(b"\n"):
-            raise BridgeError("Invalid or oversized bridge response")
+            raise BridgeError(f"Invalid or oversized bridge response. Operation ID: {request_id}")
         response = json.loads(raw)
     except (OSError, ValueError) as exc:
-        raise BridgeError(f"Cannot communicate with MakerBridge: {exc}. Do not retry a mutation blindly; inspect current state.") from exc
+        raise BridgeError(f"Cannot communicate with MakerBridge: {exc}. Operation ID: {request_id}. Query maker_get_operation before retrying a mutation.") from exc
     if not isinstance(response, dict) or type(response.get("ok")) is not bool:
-        raise BridgeError("Invalid bridge response envelope")
+        raise BridgeError(f"Invalid bridge response envelope. Operation ID: {request_id}")
     if not response["ok"]:
-        message = response.get("error", "Unknown bridge error")
+        message = str(response.get("error", "Unknown bridge error"))
         if response.get("backup_card"):
             message += f". Recovery card: {response['backup_card']}"
+        message += f". Operation ID: {response.get('operation_id', request_id)}"
         raise BridgeError(message)
     if "result" not in response:
-        raise BridgeError("Bridge response is missing its result")
+        raise BridgeError(f"Bridge response is missing its result. Operation ID: {request_id}")
     return response["result"]
 
 

@@ -15,7 +15,7 @@ using UnityEngine;
 
 namespace KKMakerBridge
 {
-    [BepInPlugin("local.koikatu.makerbridge", "KK Maker Bridge", "0.2.0")]
+    [BepInPlugin("local.koikatu.makerbridge", "KK Maker Bridge", "0.3.0")]
     [BepInDependency("marco.kkapi")]
     [BepInProcess("Koikatu.exe")]
     public sealed partial class MakerBridge : BaseUnityPlugin
@@ -30,6 +30,8 @@ namespace KKMakerBridge
 
         private sealed class Work
         {
+            public string Id;
+            public OperationContext Context = new OperationContext();
             public JObject Request;
             public JObject Response;
             public readonly object Gate = new object();
@@ -56,7 +58,7 @@ namespace KKMakerBridge
                 listener.Start(8);
                 File.WriteAllText(Path.Combine(runtime, "endpoint.json"), new JObject {
                     {"host", "127.0.0.1"}, {"port", port}, {"token", token},
-                    {"pid", System.Diagnostics.Process.GetCurrentProcess().Id}, {"version", "0.2.0"}
+                    {"pid", System.Diagnostics.Process.GetCurrentProcess().Id}, {"version", "0.3.0"}
                 }.ToString());
                 new Thread(Listen) { IsBackground = true, Name = "KK Maker Bridge" }.Start();
                 MakerAPI.MakerExiting += OnMakerExit;
@@ -112,8 +114,11 @@ namespace KKMakerBridge
                                 if ((string)request["token"] != token) throw new Exception("Invalid bridge token");
                                 if (request["method"] == null || request["method"].Type != JTokenType.String) throw new Exception("method must be a string");
                                 if (request["params"] != null && !(request["params"] is JObject)) throw new Exception("params must be an object");
-                                var work = new Work { Request = request };
-                                lock (queue) { if (queue.Count >= 8) throw new Exception("Bridge busy"); queue.Enqueue(work); }
+                                if ((string)request["method"] == "get_operation") {
+                                    writer.WriteLine(Ok(OperationStatus((string)request["params"]["operation_id"])).ToString(Formatting.None));
+                                    continue;
+                                }
+                                var work = RegisterWork(request);
                                 lock (work.Gate)
                                 {
                                     DateTime deadline = DateTime.UtcNow.AddSeconds(40);
@@ -122,8 +127,10 @@ namespace KKMakerBridge
                                     if (work.State != 2)
                                     {
                                         bool started = work.State == 1;
-                                        work.State = 3;
+                                        if (!started) work.State = 3;
                                         reply = Error(started ? "Operation timed out after starting; inspect state before retrying" : "Game did not process request; queued operation canceled");
+                                        reply["operation_id"] = work.Id;
+                                        if (work.Context.Backup != null) reply["backup_card"] = work.Context.Backup;
                                     }
                                     else reply = work.Response;
                                 }
@@ -157,7 +164,7 @@ namespace KKMakerBridge
         {
             // Drive nested game coroutines ourselves so their exceptions become RPC errors.
             // Unity's default nested coroutine runner otherwise logs and loses these failures.
-            var context = new OperationContext();
+            var context = work.Context;
             var stack = new Stack<IEnumerator>();
             stack.Push(Operation((string)work.Request["method"], work.Request["params"] as JObject ?? new JObject(), context));
             Exception failure = null;
@@ -180,6 +187,7 @@ namespace KKMakerBridge
                 while (stack.Count > 0) { try { var disposable = stack.Pop() as IDisposable; if (disposable != null) disposable.Dispose(); } catch (Exception ex) { Logger.LogWarning(ex.Message); } }
                 JObject reply = failure == null ? Ok(context.Result ?? JValue.CreateNull()) : Error(failure.Message);
                 if (context.Backup != null) reply["backup_card"] = context.Backup;
+                reply["operation_id"] = work.Id;
                 if (failure != null) Logger.LogWarning((string)work.Request["method"] + ": " + failure.Message);
                 lock (work.Gate) { work.Response = reply; work.State = 2; Monitor.PulseAll(work.Gate); }
                 busy = false;
@@ -190,6 +198,14 @@ namespace KKMakerBridge
 
         private IEnumerator Operation(string method, JObject p, OperationContext context)
         {
+            if (method == "set_design") { yield return EditDesign(Character(),p,context); yield break; }
+            if (method == "set_accessory") { yield return EditAccessory(Character(),p,context); yield break; }
+            if (method == "select_coordinate") { yield return SelectCoordinate(Character(),p,context); yield break; }
+            if (method == "set_bone") { yield return EditBone(Character(),p,context); yield break; }
+            if (method == "set_material") { yield return EditMaterial(Character(),p,context); yield break; }
+            if (method == "snapshot") { yield return Snapshot(Character(),p,context); yield break; }
+            if (method == "restore_snapshot") { yield return RestoreSnapshot(Character(),p,context); yield break; }
+            if (method == "capture_views") { yield return CaptureViews(p,context); yield break; }
             if (method == "set_hair") { yield return EditHair(Character(), p, context); yield break; }
             if (method == "set_clothes") { yield return EditClothes(Character(), p, context); yield break; }
             if (method == "load_card") { yield return LoadCard(Character(), p, context); yield break; }
@@ -208,13 +224,22 @@ namespace KKMakerBridge
         private JToken Dispatch(string method, JObject p)
         {
             if (method == "status") return new JObject {
-                {"bridge_version", "0.2.0"}, {"inside_maker", MakerAPI.InsideMaker},
+                {"bridge_version", "0.3.0"}, {"inside_maker", MakerAPI.InsideMaker},
                 {"maker_ready", MakerAPI.InsideAndLoaded}, {"unity", Application.unityVersion},
                 {"game_root", gameRoot}, {"undo_count", undo.Count}
             };
             var cha = Character();
             switch (method)
             {
+                case "capabilities": return Capabilities(cha);
+                case "get_design": return new JObject { {"values",DesignValues(cha)},{"schema",DesignSchema()} };
+                case "get_accessories": return Accessories(cha);
+                case "list_coordinates": return Coordinates(cha);
+                case "list_bones": return Bones(cha,p);
+                case "list_materials": return Materials(cha,p);
+                case "resolve_asset": return ResolveAsset(p);
+                case "camera_preset": return CameraPreset(p);
+                case "list_snapshots": return ListSnapshots();
                 case "get_character": return CharacterInfo(cha);
                 case "set_shapes": return SetShapes(cha, p);
                 case "undo_shapes": return UndoShapes(cha);
@@ -413,7 +438,10 @@ namespace KKMakerBridge
             bool body = card.custom.body.shapeValueBody.SequenceEqual(cha.chaFile.custom.body.shapeValueBody);
             bool hair = JToken.DeepEquals(HairInfo(card.custom.hair), HairInfo(cha.chaFile.custom.hair));
             bool clothes = JToken.DeepEquals(ClothesInfo(card.coordinate[cha.chaFile.status.coordinateType].clothes), ClothesInfo(cha.nowCoordinate.clothes));
-            return new JObject { {"readable", true}, {"name", card.parameter.fullname}, {"face_matches", face}, {"body_matches", body}, {"hair_matches", hair}, {"clothes_matches", clothes}, {"sex_matches", card.parameter.sex == cha.sex}, {"name_matches", card.parameter.fullname == cha.chaFile.parameter.fullname} };
+            var savedDesign=DesignValues(card); var currentDesign=DesignValues(cha);
+            savedDesign.Remove("identity"); currentDesign.Remove("identity");
+            bool design=JToken.DeepEquals(savedDesign,currentDesign);
+            return new JObject { {"readable", true}, {"name", card.parameter.fullname}, {"face_matches", face}, {"body_matches", body}, {"hair_matches", hair}, {"clothes_matches", clothes}, {"design_matches",design}, {"sex_matches", card.parameter.sex == cha.sex}, {"name_matches", card.parameter.fullname == cha.chaFile.parameter.fullname} };
         }
 
         private static BaseCameraControl_Ver2 CameraControl()

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 — 2026-10-11
+
+- Expand to 33 tools: eyes/eyebrows/skin/makeup/identity, accessories and outfit selection.
+- Add optional ABMX and Material Editor adapters with validated inputs and backup cards.
+- Resolve stable Sideloader GUID/original-slot references to current runtime IDs.
+- Add persistent snapshots, camera presets and multi-angle image capture.
+- Track requests in a bounded journal; report operation IDs and prevent duplicate execution while retained.
+- Verify exposed cosmetic settings on card readback and preserve snapshot display names across translation hooks.
+- Add opt-in design workflow integration tests.
+
 ## 0.2.0 — 2026-10-10
 
 - Add appearance inspection, hair selection/colors/length and active-coordinate clothes selection/colors.
