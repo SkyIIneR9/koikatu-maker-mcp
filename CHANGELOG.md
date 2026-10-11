@@ -7,6 +7,7 @@
 - Include texture dimensions and UV values in material inspection.
 - Clear texture/UV overrides with an explicit save/reload workflow and recovery card.
 - Add offline PNG/staging tests and an opt-in texture persistence/reset integration suite.
+- Accept Windows short path aliases during PNG staging while rejecting linked paths.
 
 ## 0.3.0 — 2026-10-11
 

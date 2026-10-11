@@ -1,5 +1,5 @@
 """PNG import validation and staging tests; generated diagnostic fixtures only."""
-import json
+import os
 from pathlib import Path
 import struct
 import sys
@@ -79,6 +79,51 @@ class TextureTests(unittest.TestCase):
         for path in ('relative.png', str(Path.cwd() / 'not.png.txt')):
             with self.assertRaisesRegex(ValueError, 'absolute local'):
                 stage_texture(path, Path.cwd())
+
+    def test_parent_segments_are_not_links(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'child').mkdir()
+            path = root / 'input.png'
+            path.write_bytes(png())
+            result = stage_texture(str(path), root / 'child' / '..' / 'runtime')
+            self.assertEqual(Path(result['path']).read_bytes(), path.read_bytes())
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows path aliases')
+    def test_windows_short_paths_are_not_links(self):
+        import ctypes
+        from ctypes import wintypes
+        short_path = ctypes.WinDLL('kernel32', use_last_error=True).GetShortPathNameW
+        short_path.argtypes = (wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD)
+        short_path.restype = wintypes.DWORD
+        with tempfile.TemporaryDirectory(prefix='texture staging long name ') as tmp:
+            root = Path(tmp)
+            path = root / 'input.png'
+            path.write_bytes(png())
+            buffer = ctypes.create_unicode_buffer(32768)
+            size = short_path(str(root), buffer, len(buffer))
+            self.assertTrue(0 < size < len(buffer))
+            result = stage_texture(str(path), Path(buffer.value) / 'runtime')
+            self.assertEqual(Path(result['path']).read_bytes(), path.read_bytes())
+
+    def test_linked_runtime_is_rejected_before_writing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / 'input.png'
+            path.write_bytes(png())
+            destination = root / 'destination'
+            destination.mkdir()
+            link = root / 'linked'
+            try:
+                link.symlink_to(destination, target_is_directory=True)
+            except OSError as exc:
+                self.skipTest('Cannot create symlinks: '+str(exc))
+            try:
+                with self.assertRaisesRegex(ValueError, 'Linked'):
+                    stage_texture(str(path), link / 'runtime')
+                self.assertEqual(list(destination.iterdir()), [])
+            finally:
+                link.unlink()
 
 
 if __name__ == '__main__':

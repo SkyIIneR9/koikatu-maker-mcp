@@ -68,9 +68,11 @@ The test accounts for the installed translation plugin serializing a native nick
 
 ## Texture workflow, 0.4.0
 
-Nine additional offline tests cover PNG checksums, headers, dimensions, truncation,
+Twelve additional offline tests cover PNG checksums, headers, dimensions, truncation,
 appended data, animation rejection, size bounds, hash deduplication and damaged
-staging files. Total offline suite: 18 tests. These inspect structure; Unity is
+staging files, Windows short paths, parent segments and linked directories.
+Total offline suite: 21 tests (platform-specific checks may skip where unsupported).
+These inspect structure; Unity is
 responsible for verifying actual image decoding before applying a texture.
 
 ```powershell

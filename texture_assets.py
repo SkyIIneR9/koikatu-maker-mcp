@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import os
 from pathlib import Path
+import stat
 import struct
 import tempfile
 import zlib
@@ -56,6 +57,19 @@ def inspect_png(data: bytes) -> dict:
     raise ValueError('Incomplete PNG')
 
 
+def reject_linked_path(path: Path) -> None:
+    # resolve() also expands legitimate Windows 8.3 names and '..' segments;
+    # comparing its spelling with absolute() does not identify links reliably.
+    absolute = path.absolute()
+    for part in (absolute, *absolute.parents):
+        try:
+            info = part.lstat()
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+            raise ValueError('Linked texture paths are not supported')
+
+
 def stage_texture(source: str, runtime: Path) -> dict:
     path = Path(source)
     if not path.is_absolute() or path.suffix.lower() != '.png':
@@ -64,13 +78,11 @@ def stage_texture(source: str, runtime: Path) -> dict:
         data = stream.read(MAX_BYTES + 1)
     info = inspect_png(data)
     directory = runtime / 'textures'
+    reject_linked_path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    if directory.resolve() != directory.absolute():
-        raise ValueError('Linked texture directories are not supported')
     name = info['sha256'] + '.png'
     target = directory / name
-    if target.is_symlink() or (target.exists() and target.resolve() != target.absolute()):
-        raise ValueError('Linked texture files are not supported')
+    reject_linked_path(target)
     if target.exists():
         with target.open('rb') as stream:
             if stream.read(MAX_BYTES + 1) != data:
