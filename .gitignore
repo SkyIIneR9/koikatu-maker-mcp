@@ -1,0 +1,16 @@
+build/
+runtime/
+lib/
+__pycache__/
+.venv/
+dist/
+*.dll
+*.exe
+*.pdb
+*.png
+*.zip
+*.log
+*.cfg
+*.disabled
+.env
+*.local.*
