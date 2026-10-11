@@ -42,4 +42,6 @@ On 2026-10-10 both mutation suites passed on original Koikatu / Unity 5.6.2f1, B
 - PNG as MCP image content; edited render inspected visually.
 - Rejection of invalid shapes/assets/colors/channels, traversal and card overwrite.
 
-This does not establish compatibility with all mods or verify all extended card data. Materials can override rendered colors; female characters, other game editions, additional clothing slots and all hair-length combinations need further coverage. GitHub CI is configured for Python checks only and has not been run remotely during local release preparation.
+This does not establish compatibility with all mods or verify all extended card data. Materials can override rendered colors; female characters, other game editions, additional clothing slots and all hair-length combinations need further coverage.
+
+On 2026-10-11, [GitHub CI passed](https://github.com/SkyIIneR9/koikatu-maker-mcp/actions/runs/38126321198) on Windows with Python 3.13: dependency installation, Python compilation, all eight transport tests and source packaging. CI does not compile the game plugin or run live game tests.
