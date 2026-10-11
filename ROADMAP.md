@@ -1,6 +1,6 @@
 # Roadmap
 
-Version 0.3 provides the core character-design workflow with optional mod adapters.
+Version 0.4 provides the core character-design workflow with optional mod adapters.
 See TESTING.md for what was exercised on a live game. Remaining items below are
 proposed work, not claims of implemented support.
 
@@ -13,6 +13,12 @@ proposed work, not claims of implemented support.
 - Optional BodyTop ABMX and Material Editor color/float adapters.
 - Named cameras and multi-angle MCP images with camera restoration.
 
+## Implemented in 0.4
+
+- Validated content-hash PNG library, current texture export and MCP previews.
+- Persistent Material Editor texture/UV editing with backup and verified reset.
+- Card round-trip testing with staged texture absent, reset persistence and snapshot recovery.
+
 ## Reliability first
 
 - Exercise real engine-stall timeout scenarios, bounded-journal eviction and recovery after restart.
@@ -23,7 +29,7 @@ proposed work, not claims of implemented support.
 ## Character design workflow
 
 - MoreAccessories slots, clothing patterns/subparts and coordinate makeup.
-- Texture/overlay import and additional shader properties with typed validation.
+- Dedicated overlay layers, normal-map conversion and additional typed shader properties.
 - Optional accessory-bone ABMX support and clearer capabilities for unsupported mod APIs.
 
 ## Distribution

@@ -15,7 +15,7 @@ using UnityEngine;
 
 namespace KKMakerBridge
 {
-    [BepInPlugin("local.koikatu.makerbridge", "KK Maker Bridge", "0.3.0")]
+    [BepInPlugin("local.koikatu.makerbridge", "KK Maker Bridge", "0.4.0")]
     [BepInDependency("marco.kkapi")]
     [BepInProcess("Koikatu.exe")]
     public sealed partial class MakerBridge : BaseUnityPlugin
@@ -58,7 +58,7 @@ namespace KKMakerBridge
                 listener.Start(8);
                 File.WriteAllText(Path.Combine(runtime, "endpoint.json"), new JObject {
                     {"host", "127.0.0.1"}, {"port", port}, {"token", token},
-                    {"pid", System.Diagnostics.Process.GetCurrentProcess().Id}, {"version", "0.3.0"}
+                    {"pid", System.Diagnostics.Process.GetCurrentProcess().Id}, {"version", "0.4.0"}
                 }.ToString());
                 new Thread(Listen) { IsBackground = true, Name = "KK Maker Bridge" }.Start();
                 MakerAPI.MakerExiting += OnMakerExit;
@@ -198,6 +198,7 @@ namespace KKMakerBridge
 
         private IEnumerator Operation(string method, JObject p, OperationContext context)
         {
+            if (method == "set_material_texture") { yield return EditTexture(Character(),p,context); yield break; }
             if (method == "set_design") { yield return EditDesign(Character(),p,context); yield break; }
             if (method == "set_accessory") { yield return EditAccessory(Character(),p,context); yield break; }
             if (method == "select_coordinate") { yield return SelectCoordinate(Character(),p,context); yield break; }
@@ -224,13 +225,16 @@ namespace KKMakerBridge
         private JToken Dispatch(string method, JObject p)
         {
             if (method == "status") return new JObject {
-                {"bridge_version", "0.3.0"}, {"inside_maker", MakerAPI.InsideMaker},
+                {"bridge_version", "0.4.0"}, {"inside_maker", MakerAPI.InsideMaker},
                 {"maker_ready", MakerAPI.InsideAndLoaded}, {"unity", Application.unityVersion},
                 {"game_root", gameRoot}, {"undo_count", undo.Count}
             };
             var cha = Character();
             switch (method)
             {
+                case "inspect_texture": return InspectTexture(p);
+                case "list_textures": return ListTextures(p);
+                case "export_material_texture": return ExportTexture(cha,p);
                 case "capabilities": return Capabilities(cha);
                 case "get_design": return new JObject { {"values",DesignValues(cha)},{"schema",DesignSchema()} };
                 case "get_accessories": return Accessories(cha);

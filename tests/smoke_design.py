@@ -31,9 +31,9 @@ async def main():
                 return json.loads(next(x.text for x in result.content if x.type == 'text'))
 
             tools = await session.list_tools()
-            assert len(tools.tools) == 33
-            report['checks'].append('Real MCP exposes 33 tools')
-            assert (await data('status'))['bridge_version'] == '0.3.0'
+            assert len(tools.tools) == 37
+            report['checks'].append('Real MCP exposes 37 tools')
+            assert (await data('status'))['bridge_version'] == '0.4.0'
             baseline = await data('snapshot', name='design_test')
             report['snapshot_id'] = baseline['id']
             report['baseline_card'] = baseline['card']

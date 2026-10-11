@@ -31,7 +31,7 @@ async def main(args):
                 return json.loads(next(x.text for x in result.content if x.type == "text"))
 
             status = await data("maker_status")
-            assert status["bridge_version"] == "0.3.0" and status["maker_ready"]
+            assert status["bridge_version"] == "0.4.0" and status["maker_ready"]
             character = await data("maker_get_character")
             appearance = await data("maker_get_appearance")
             camera = await data("maker_get_camera")

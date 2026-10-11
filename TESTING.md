@@ -6,7 +6,7 @@ Run from the source directory with Python 3.13:
 
 ```powershell
 python -m unittest discover -s tests -p 'test_*.py' -v
-python -m compileall -q bridge_client.py server.py tests
+python -m compileall -q bridge_client.py server.py texture_assets.py package_source.py tests
 ```
 
 Nine transport tests use a local fake plugin to exercise authenticated requests, Unicode responses, rejected tokens, recovery paths, operation IDs on uncertain responses, malformed/truncated/oversized responses, bad or missing endpoints and request limits. No game or MCP SDK is needed. They test the Python client contract, not the real plugin's authentication implementation.
@@ -65,3 +65,38 @@ On 2026-10-11 this suite passed with ABMX 5.4.0.0 and Material Editor 4.0.2.0, a
 - Snapshot restores original cosmetic/hair/clothes/accessory values, camera, the tested ABMX bone and material properties.
 
 The test accounts for the installed translation plugin serializing a native nickname while displaying its translation; other edited identity fields are compared. Timeout recovery during a real engine stall, all shader types, all bone operations, every cosmetic asset type, female characters and additional mod versions remain unverified. Passing suites establish the exercised workflow, not universal compatibility.
+
+## Texture workflow, 0.4.0
+
+Nine additional offline tests cover PNG checksums, headers, dimensions, truncation,
+appended data, animation rejection, size bounds, hash deduplication and damaged
+staging files. Total offline suite: 18 tests. These inspect structure; Unity is
+responsible for verifying actual image decoding before applying a texture.
+
+```powershell
+.\.venv\Scripts\python.exe -X utf8 tests/smoke_textures.py --mutate
+```
+
+Use a clothed male test character with Material Editor enabled and an unmodified
+top `_MainTex` (the test selects a renderer other than an emblem). A generated
+cyan/magenta grid is used only as a diagnostic fixture; no character assets are
+bundled. Recovery information is saved immediately in
+`runtime/texture-smoke-recovery.json`. The test restores its snapshot in `finally`.
+
+On 2026-10-11, the suite passed on the same Koikatu/Material Editor installation:
+
+- 37 MCP tools; PNG staging, deduplication, listing and image export.
+- Invalid paths/UV bounds, conflicting reset arguments, unknown properties and
+  character-card input rejected without changing exported pixels.
+- Texture and UV changes applied with a recovery card; edited render inspected.
+- Texture pixels and UV survived save/load while the staged PNG was temporarily
+  renamed out of the library. The source file was restored afterward.
+- Reset removed the persisted texture/UV overrides, restored the original exported
+  pixels and survived another card save/load. Stale renderer IDs were rejected.
+- Original snapshot, camera and texture export hash restored afterward.
+
+The core, appearance and design integration regressions also passed, including
+the added texture inspection in material comparisons.
+This does not verify all shaders, normal-map conventions, color-space round trips,
+4K stress cases, or every texture property. Export hashes were compared within this
+installation; GPU color-space conversion can differ across environments.

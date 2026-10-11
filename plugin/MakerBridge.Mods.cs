@@ -47,7 +47,7 @@ namespace KKMakerBridge
                 var type=OptionalType(name);
                 mods[name]=new JObject { {"available",type != null},{"assembly_version",type == null ? null : type.Assembly.GetName().Version.ToString()} };
             }
-            return new JObject { {"version","0.3.0"},{"mods",mods},{"design_schema",DesignSchema()},{"accessory_slots",Math.Min(20,cha.nowCoordinate.accessory.parts.Length)},{"coordinate_count",cha.chaFile.coordinate.Length},{"operation_history",128},{"limitations",new JArray("MoreAccessories slots above 19 are not exposed","Material adapter supports listed color/float properties, not texture import or shader replacement","ABMX adapter targets BodyTop bones; installed custom card-load toggles still apply")} };
+            return new JObject { {"version","0.4.0"},{"mods",mods},{"design_schema",DesignSchema()},{"accessory_slots",Math.Min(20,cha.nowCoordinate.accessory.parts.Length)},{"coordinate_count",cha.chaFile.coordinate.Length},{"operation_history",128},{"limitations",new JArray("MoreAccessories slots above 19 are not exposed","Material adapter supports listed color/float/texture properties; shader replacement and packed normal conversion are not exposed","ABMX adapter targets BodyTop bones; installed custom card-load toggles still apply")} };
         }
         private static JObject AssetReference(ChaListDefine.CategoryNo category,int id)
         {
@@ -131,7 +131,7 @@ namespace KKMakerBridge
             var colors=new JObject(); var floats=new JObject();
             foreach(var key in MaterialColors) if(material.HasProperty(key)) colors[key]=Rgba(material.GetColor(key));
             foreach(var key in MaterialFloats) if(material.HasProperty(key)) floats[key]=material.GetFloat(key);
-            return new JObject { {"colors",colors},{"floats",floats} };
+            return new JObject { {"colors",colors},{"floats",floats},{"textures",TextureValues(material)} };
         }
         private static JObject Materials(ChaControl cha,JObject p)
         {

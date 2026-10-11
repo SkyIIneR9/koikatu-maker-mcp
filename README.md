@@ -1,4 +1,4 @@
-# Koikatu Character Maker MCP — 0.3.0
+# Koikatu Character Maker MCP — 0.4.0
 
 [Русская документация](README.ru.md)
 
@@ -88,11 +88,11 @@ New cards go to `UserData/chara/male/MCP` or `female/MCP`; recovery cards go in 
 
 Hair/clothing edits and loads back up before changing the character. If an operation fails after starting, inspect its recovery path and current state, then load that card if needed. A timeout does not prove failure: query `maker_get_operation` with the operation ID from the error before retrying. The current game session retains the last 128 requests. Identical request IDs and arguments return the existing operation; duplicate IDs with different arguments are rejected. This bounded history is not durable across game restarts or eviction. Screenshots, test cards and backups are not automatically deleted.
 
-Save/load uses game APIs and installed mod hooks. Full base-game load flags are enabled temporarily, but **third-party custom load toggles remain in effect**. Verification compares sex, name, vanilla shapes, exposed hair values, active-coordinate clothes and exposed cosmetic settings. Translation plugins can serialize native nicknames while displaying translated ones; snapshots preserve the visible identity separately. It does not verify every extended mod field or pixel-identical rendering. ABMX and Material Editor are optional adapters. ABMX targets BodyTop bones; Material Editor exposes listed color/float properties, without shader replacement or texture import. Accessories support base-game slots 0..19; extra MoreAccessories slots and overlay authoring are not exposed. Clothing/accessory edits affect the active coordinate; use `maker_select_coordinate` to switch outfits.
+Save/load uses game APIs and installed mod hooks. Full base-game load flags are enabled temporarily, but **third-party custom load toggles remain in effect**. Verification compares sex, name, vanilla shapes, exposed hair values, active-coordinate clothes and exposed cosmetic settings. Translation plugins can serialize native nicknames while displaying translated ones; snapshots preserve the visible identity separately. It does not verify every extended mod field or pixel-identical rendering. ABMX and Material Editor are optional adapters. ABMX targets BodyTop bones; Material Editor exposes listed color/float/texture properties, including PNG import and UV changes, without shader replacement. Accessories support base-game slots 0..19; extra MoreAccessories slots and overlay authoring are not exposed. Clothing/accessory edits affect the active coordinate; use `maker_select_coordinate` to switch outfits.
 
 ## Design workflow in 0.3
 
-There are **33 tools**. In addition to the original tools above:
+There are **37 tools**. In addition to the original tools above:
 
 | Tools | Purpose |
 |---|---|
@@ -113,6 +113,27 @@ Start with capabilities and a snapshot. Query the relevant schema/catalog before
 ABMX edits are coordinate-specific by default. Setting `coordinate_specific=false` deliberately collapses outfit-specific modifiers to the current values for all outfits. Material renderer IDs expire after reload: query again. Material Editor persists by material name within a target, so equal names can share changes. The bridge supports a typed property allowlist because Unity 5.6 cannot enumerate shader properties at runtime.
 
 Snapshots store a card and camera/coordinate metadata under local runtime. Restoring first creates a recovery card, then loads the snapshot and reports base-game comparisons. Third-party card-load toggles still apply; inspect extended mod state with its adapter. Snapshot metadata does not contain a complete copy of every mod's state. Camera presets and snapshots are local, ignored by Git, and never packaged.
+
+## Textures in 0.4
+
+| Tool | Purpose |
+|---|---|
+| `maker_import_texture` | Stage a local PNG by SHA-256 and validate it in Unity; no character edit |
+| `maker_list_textures` | Page through the private texture library |
+| `maker_export_material_texture` | Export the current texture as PNG and MCP image content |
+| `maker_set_material_texture` | Apply imported PNG, change UV scale/offset, or reset texture+UV overrides |
+
+1. Create a snapshot and read `maker_list_materials` for the target.
+2. Export a texture if you need a layout reference; author a PNG separately.
+3. Import its absolute local path. Reuse the returned `texture` hash filename.
+4. Apply it to a returned property in `values.textures`, with current renderer ID/material index. Optional `scale` and `offset` are pairs; scale may mirror with negative components but cannot be zero.
+5. Capture the character, inspect the result and save a card. Material Editor embeds the image bytes in the card; the source PNG is not needed to load it later.
+
+Imports accept static PNG only, up to 16 MiB and 4096 pixels per side. Header/chunk checksums, dimensions and Unity decoding are checked; appended card data and animated PNGs are rejected. Files live under the configured runtime's `textures` and `texture-exports` directories, outside Git and source archives. Files are kept until explicitly removed. Every apply/reset creates a recovery card.
+
+`action="reset"` removes texture **and UV** overrides for the chosen property, saves the cleared state to a local recovery-area card and reloads it to refresh the texture. It resets to the game's base material rather than to a previous custom texture; use a snapshot to recover a prior custom texture. Reload invalidates renderer IDs. Keep Material Editor's custom load toggles enabled for persistence/reset. Same-named materials within one target can share edits.
+
+Export is GPU readback of the current 2D texture, with alpha. Color-space conversion may occur. Packed normal maps are not unpacked into editable tangent-space normals; arbitrary normal-map replacement is not a verified workflow. Shader properties remain an explicit allowlist: unknown/custom properties are not inferred. This feature edits Material Editor texture slots, not Skin/Clothes Overlay plugin layers.
 
 ## Development
 

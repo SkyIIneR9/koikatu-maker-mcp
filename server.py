@@ -7,6 +7,8 @@ from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP, Image
 from bridge_client import call
+from bridge_client import ENDPOINT
+from texture_assets import stage_texture
 
 mcp = FastMCP("Koikatu Character Maker", instructions="Controls the active character in Koikatu Character Maker. Read status, get_character and get_appearance first. Shape values are normalized (0.5 means 50%). Use returned enum names, slots and asset IDs; never guess indices. Save a baseline card before a creative session and capture after edits. Hair/clothes edits and same-sex card loads save an automatic backup_card, which can be restored with load_card. Clothes edits affect the active coordinate only. Use capabilities/get_design for supported settings. ABMX and Material Editor adapters require their installed plugins; custom card-load toggles still apply. Renderer IDs expire on reload. Create a snapshot before a design session. If a mutation times out, query get_operation with the ID from the error before retrying.")
 _rpc_lock = asyncio.Lock()
@@ -180,13 +182,13 @@ async def maker_set_bone(name: str, scale: list[float] | None = None, length: fl
 
 @mcp.tool()
 async def maker_list_materials(target: str = "character", slot: int = 0) -> dict:
-    """List renderers/materials and supported typed color/float properties for character, head, hair, clothes or accessory. Renderer IDs expire after reload. Slot addresses hair/clothes/accessory indices."""
+    """List renderers/materials and supported typed color/float/texture properties for character, head, hair, clothes or accessory. Texture entries include dimensions, UV scale/offset. Renderer IDs expire after reload. Slot addresses hair/clothes/accessory indices."""
     return await rpc("list_materials", target=target, slot=slot)
 
 
 @mcp.tool()
 async def maker_set_material(target: str, renderer_id: int, material_index: int, slot: int = 0, colors: dict | None = None, floats: dict | None = None) -> dict:
-    """Material Editor: persist returned color/float properties with backup. Use only keys from list_materials. Same-named materials within the target may share persisted edits. No texture import/shader replacement."""
+    """Material Editor: persist returned color/float properties with backup. Use only keys from list_materials. Same-named materials within the target may share persisted edits. For textures use set_material_texture. Shader replacement is unsupported."""
     return await rpc("set_material", **{k:v for k,v in locals().items() if v is not None})
 
 
@@ -225,6 +227,33 @@ async def maker_capture_views(yaw_offsets: list[float] | None = None, width: int
     """Capture 1..8 relative yaw angles (default -30,0,30 degrees), returning images and paths, then restore the original camera in finally. Dimensions 256..2048."""
     result = await rpc("capture_views", **{k:v for k,v in locals().items() if v is not None})
     return [json.dumps(result), *[Image(path=x["path"]) for x in result["captures"]]]
+
+
+
+@mcp.tool()
+async def maker_import_texture(path: str) -> dict:
+    """Import an absolute local PNG into the private texture library (no character edit). Max 16 MiB, 4096 per side. Rejects animated PNGs and character cards/appended data. Returns a content-hash filename for set_material_texture. Unity verifies decoding before use."""
+    staged = await asyncio.to_thread(stage_texture, path, ENDPOINT.parent)
+    return await rpc("inspect_texture", texture=staged["texture"])
+
+
+@mcp.tool()
+async def maker_list_textures(offset: int = 0, limit: int = 30) -> dict:
+    """List imported texture filenames and sizes, with pagination. Texture library and exports stay local and are excluded from Git."""
+    return await rpc("list_textures", offset=offset, limit=limit)
+
+
+@mcp.tool()
+async def maker_export_material_texture(target: str, renderer_id: int, material_index: int, property: str, slot: int = 0) -> list:
+    """Return the current 2D material texture as a PNG image and local export path. Use a property from list_materials values.textures. GPU readback may convert color space; packed normal maps are not unpacked. Max 4096 per side."""
+    result = await rpc("export_material_texture", **locals())
+    return [json.dumps(result), Image(path=result["path"])]
+
+
+@mcp.tool()
+async def maker_set_material_texture(target: str, renderer_id: int, material_index: int, property: str, slot: int = 0, action: str = "set", texture: str | None = None, scale: list[float] | None = None, offset: list[float] | None = None) -> dict:
+    """Apply imported texture and/or UV scale/offset through Material Editor, with backup. Use hash filename from import_texture and property from list_materials. Scale nonzero, UV components -100..100. Texture embeds in saved cards. action=reset clears texture+UV overrides, saves/reloads the character and invalidates renderer IDs; custom mod load toggles still apply. Same-named materials within target can share edits."""
+    return await rpc("set_material_texture", **{k:v for k,v in locals().items() if v is not None})
 
 
 if __name__ == "__main__":
